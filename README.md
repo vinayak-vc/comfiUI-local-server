@@ -202,6 +202,13 @@ The backend never exposes raw ComfyUI APIs publicly. It communicates with ComfyU
 
 ## API Overview
 
+Client integration docs (OpenAPI + Postman) are available in:
+
+- `api_docs/`
+  - `openapi.yaml` (import into Swagger / Postman)
+  - `postman_collection.json`
+  - `postman_environment.json`
+
 Health:
 
 * `GET /api/v1/health`

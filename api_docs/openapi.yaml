@@ -1,0 +1,899 @@
+openapi: 3.1.0
+info:
+  title: ComfyUI Orchestration Platform API
+  version: "0.1.0"
+  description: >
+    Client-facing OpenAPI spec for the backend HTTP API. Base path is /api/v1.
+
+servers:
+  - url: http://localhost:8000
+    description: Local dev
+
+tags:
+  - name: auth
+  - name: generation
+  - name: health
+  - name: storage
+  - name: monitoring
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+  schemas:
+    PrincipalType:
+      type: string
+      enum: [user, api_key]
+
+    Principal:
+      type: object
+      required: [id, type, name, is_admin]
+      properties:
+        id: { type: string }
+        type: { $ref: "#/components/schemas/PrincipalType" }
+        name: { type: string }
+        is_admin: { type: boolean, default: false }
+
+    UserCreateRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 12
+          maxLength: 128
+
+    UserResponse:
+      type: object
+      required: [id, email, is_active, is_admin, created_at]
+      properties:
+        id: { type: string }
+        email: { type: string, format: email }
+        is_active: { type: boolean }
+        is_admin: { type: boolean }
+        created_at: { type: string, format: date-time }
+
+    TokenResponse:
+      type: object
+      required: [access_token, token_type, expires_in]
+      properties:
+        access_token: { type: string }
+        token_type: { type: string, default: bearer }
+        expires_in: { type: integer }
+
+    ApiKeyCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+
+    ApiKeyCreateResponse:
+      type: object
+      required: [id, name, key_prefix, api_key, created_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        key_prefix: { type: string }
+        api_key: { type: string }
+        created_at: { type: string, format: date-time }
+
+    GenerationMode:
+      type: string
+      enum: [t2i, i2i, t2v, i2v]
+
+    JobStatus:
+      type: string
+      enum: [queued, running, retrying, completed, failed, cancelled]
+
+    LoraInjection:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        strength_model: { type: number, default: 1.0 }
+        strength_clip: { type: number, default: 1.0 }
+
+    WorkflowRuntimeParameters:
+      type: object
+      required: [prompt]
+      properties:
+        prompt: { type: string }
+        negative_prompt: { type: [string, "null"] }
+        seed: { type: [integer, "null"] }
+        model: { type: [string, "null"] }
+        sampler: { type: [string, "null"] }
+        scheduler: { type: [string, "null"] }
+        steps: { type: [integer, "null"], minimum: 1 }
+        cfg: { type: [number, "null"], minimum: 0 }
+        denoise: { type: [number, "null"], minimum: 0, maximum: 1 }
+        width: { type: [integer, "null"], minimum: 1 }
+        height: { type: [integer, "null"], minimum: 1 }
+        batch_size: { type: [integer, "null"], minimum: 1 }
+        input_image: { type: [string, "null"] }
+        input_video: { type: [string, "null"] }
+        loras:
+          type: array
+          items: { $ref: "#/components/schemas/LoraInjection" }
+          default: []
+        extra_parameters:
+          type: object
+          additionalProperties: true
+          default: {}
+
+    WorkflowExecutionRequest:
+      type: object
+      required: [mode, parameters]
+      properties:
+        mode: { $ref: "#/components/schemas/GenerationMode" }
+        parameters: { $ref: "#/components/schemas/WorkflowRuntimeParameters" }
+        workflow_name: { type: [string, "null"] }
+
+    OutputAsset:
+      type: object
+      required: [filename, subfolder, type, url, media_type]
+      properties:
+        filename: { type: string }
+        subfolder: { type: string }
+        type: { type: string }
+        url: { type: string, description: "URL string; server may return absolute URL." }
+        media_type: { type: string }
+
+    ProgressEvent:
+      type: object
+      required: [job_id, status, created_at]
+      properties:
+        job_id: { type: string }
+        prompt_id: { type: [string, "null"] }
+        status: { $ref: "#/components/schemas/JobStatus" }
+        node_id: { type: [string, "null"] }
+        current: { type: [integer, "null"] }
+        maximum: { type: [integer, "null"] }
+        message: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+
+    WorkflowExecutionResult:
+      type: object
+      required: [job_id, prompt_id, status, outputs, events, started_at]
+      properties:
+        job_id: { type: string }
+        prompt_id: { type: string }
+        status: { $ref: "#/components/schemas/JobStatus" }
+        outputs:
+          type: array
+          items: { $ref: "#/components/schemas/OutputAsset" }
+        events:
+          type: array
+          items: { $ref: "#/components/schemas/ProgressEvent" }
+        started_at: { type: string, format: date-time }
+        completed_at: { type: [string, "null"], format: date-time }
+        error: { type: [string, "null"] }
+
+    TrackedJob:
+      type: object
+      required: [job_id, mode, status, retry_count, outputs, created_at, updated_at]
+      properties:
+        job_id: { type: string }
+        task_id: { type: [string, "null"] }
+        prompt_id: { type: [string, "null"] }
+        mode: { $ref: "#/components/schemas/GenerationMode" }
+        status: { $ref: "#/components/schemas/JobStatus" }
+        retry_count: { type: integer, default: 0 }
+        progress_current: { type: [integer, "null"] }
+        progress_maximum: { type: [integer, "null"] }
+        error: { type: [string, "null"] }
+        outputs:
+          type: array
+          items: { $ref: "#/components/schemas/OutputAsset" }
+          default: []
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    QueueSubmissionResponse:
+      type: object
+      required: [job]
+      properties:
+        job: { $ref: "#/components/schemas/TrackedJob" }
+
+    QueueMonitoringResponse:
+      type: object
+      required:
+        - queue_name
+        - pending_count
+        - active_count
+        - reserved_count
+        - scheduled_count
+        - worker_concurrency
+        - gpu_safe
+        - persisted_status_counts
+      properties:
+        queue_name: { type: string }
+        pending_count: { type: integer }
+        active_count: { type: integer }
+        reserved_count: { type: integer }
+        scheduled_count: { type: integer }
+        worker_concurrency: { type: integer }
+        gpu_safe: { type: boolean }
+        persisted_status_counts:
+          type: object
+          additionalProperties: { type: integer }
+
+    AssetKind:
+      type: string
+      enum: [upload, output]
+
+    AssetMediaType:
+      type: string
+      enum: [image, video, other]
+
+    AssetResponse:
+      type: object
+      required:
+        - id
+        - kind
+        - media_type
+        - original_filename
+        - stored_filename
+        - content_type
+        - size_bytes
+        - checksum_sha256
+        - relative_path
+        - url
+        - created_at
+      properties:
+        id: { type: string }
+        kind: { $ref: "#/components/schemas/AssetKind" }
+        media_type: { $ref: "#/components/schemas/AssetMediaType" }
+        original_filename: { type: string }
+        stored_filename: { type: string }
+        content_type: { type: string }
+        size_bytes: { type: integer }
+        checksum_sha256: { type: string }
+        relative_path: { type: string }
+        url: { type: string }
+        created_at: { type: string, format: date-time }
+
+    AssetListResponse:
+      type: object
+      required: [assets, total]
+      properties:
+        assets:
+          type: array
+          items: { $ref: "#/components/schemas/AssetResponse" }
+        total: { type: integer }
+
+    OutputRegistrationRequest:
+      type: object
+      required: [relative_path]
+      properties:
+        relative_path: { type: string }
+        content_type: { type: [string, "null"] }
+        original_filename: { type: [string, "null"] }
+
+    CleanupResult:
+      type: object
+      required: [deleted_assets, deleted_files]
+      properties:
+        deleted_assets: { type: integer, minimum: 0 }
+        deleted_files: { type: integer, minimum: 0 }
+
+    ComponentHealth:
+      type: object
+      required: [name, status]
+      properties:
+        name: { type: string }
+        status: { type: string, enum: [healthy, unhealthy] }
+        detail: { type: [string, "null"] }
+
+    HealthCheckResponse:
+      type: object
+      required: [service, version, environment, ready, checked_at, components]
+      properties:
+        service: { type: string }
+        version: { type: string }
+        environment: { type: string }
+        ready: { type: boolean }
+        checked_at: { type: string, format: date-time }
+        components:
+          type: array
+          items: { $ref: "#/components/schemas/ComponentHealth" }
+
+    JobListResponse:
+      type: object
+      required: [total, limit, offset, jobs]
+      properties:
+        total: { type: integer, minimum: 0 }
+        limit: { type: integer, minimum: 1 }
+        offset: { type: integer, minimum: 0 }
+        status: { anyOf: [{ $ref: "#/components/schemas/JobStatus" }, { type: "null" }] }
+        jobs:
+          type: array
+          items: { $ref: "#/components/schemas/TrackedJob" }
+
+    JobCountsResponse:
+      type: object
+      required: [counts]
+      properties:
+        counts:
+          type: object
+          additionalProperties: { type: integer }
+
+    LogTailResponse:
+      type: object
+      required: [lines, truncated]
+      properties:
+        lines:
+          type: array
+          items: { type: string }
+        truncated: { type: boolean }
+
+  responses:
+    UnauthorizedError:
+      description: Missing/invalid credentials.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail: { type: string }
+
+security:
+  - bearerAuth: []
+  - apiKeyAuth: []
+
+paths:
+  /api/v1/auth/register:
+    post:
+      tags: [auth]
+      summary: Register a new user.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserCreateRequest" }
+            examples:
+              example:
+                value:
+                  email: user@example.com
+                  password: a-very-strong-password
+      responses:
+        "200":
+          description: User created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserResponse" }
+
+  /api/v1/auth/token:
+    post:
+      tags: [auth]
+      summary: Issue an access token (OAuth2 password flow).
+      description: Uses `application/x-www-form-urlencoded` with fields `username` and `password`.
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string }
+      responses:
+        "200":
+          description: Token issued.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenResponse" }
+
+  /api/v1/auth/me:
+    get:
+      tags: [auth]
+      summary: Get current principal.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: Principal.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Principal" }
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+
+  /api/v1/auth/api-keys:
+    post:
+      tags: [auth]
+      summary: Create an API key (admin only).
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ApiKeyCreateRequest" }
+      responses:
+        "200":
+          description: API key created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiKeyCreateResponse" }
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          description: Admin privileges required.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail: { type: string }
+
+  /api/v1/generation/execute:
+    post:
+      tags: [generation]
+      summary: Execute workflow immediately and await results.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WorkflowExecutionRequest" }
+            examples:
+              t2i:
+                value:
+                  mode: t2i
+                  workflow_name: null
+                  parameters:
+                    prompt: a cinematic portrait photo
+                    negative_prompt: blurry
+                    steps: 30
+                    cfg: 6
+                    width: 1024
+                    height: 1024
+                    loras: []
+                    extra_parameters: {}
+      responses:
+        "200":
+          description: Execution result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkflowExecutionResult" }
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "502":
+          description: Upstream ComfyUI error.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail: { type: string }
+
+  /api/v1/generation/queue:
+    post:
+      tags: [generation]
+      summary: Submit workflow to queue (async).
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WorkflowExecutionRequest" }
+      responses:
+        "202":
+          description: Job accepted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QueueSubmissionResponse" }
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+
+  /api/v1/generation/jobs/{job_id}:
+    get:
+      tags: [generation]
+      summary: Get tracked job by id.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - in: path
+          name: job_id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Job.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TrackedJob" }
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          description: Job not found.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail: { type: string }
+
+  /api/v1/generation/jobs/{job_id}/cancel:
+    post:
+      tags: [generation]
+      summary: Cancel a queued/running job.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - in: path
+          name: job_id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Updated job.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TrackedJob" }
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          description: Job not found.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail: { type: string }
+        "502":
+          description: Upstream ComfyUI error.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail: { type: string }
+
+  /api/v1/generation/queue:
+    get:
+      tags: [generation]
+      summary: Monitor current queue snapshot.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: Queue snapshot.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QueueMonitoringResponse" }
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+
+  /api/v1/storage/assets:
+    post:
+      tags: [storage]
+      summary: Upload an asset (multipart).
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Asset stored.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetResponse" }
+        "400":
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail: { type: string }
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+    get:
+      tags: [storage]
+      summary: List assets.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: Assets list.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetListResponse" }
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+
+  /api/v1/storage/assets/{asset_id}:
+    get:
+      tags: [storage]
+      summary: Get asset metadata by id.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - in: path
+          name: asset_id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Asset metadata.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetResponse" }
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          description: Not found.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail: { type: string }
+    delete:
+      tags: [storage]
+      summary: Delete an asset.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - in: path
+          name: asset_id
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          description: Not found.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail: { type: string }
+
+  /api/v1/storage/assets/{asset_id}/download:
+    get:
+      tags: [storage]
+      summary: Download an asset file by id.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - in: path
+          name: asset_id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: File download.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          description: Not found.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail: { type: string }
+
+  /api/v1/storage/outputs/register:
+    post:
+      tags: [storage]
+      summary: Register an output file (already on disk) as an asset record.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OutputRegistrationRequest" }
+      responses:
+        "201":
+          description: Asset created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetResponse" }
+        "400":
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail: { type: string }
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          description: Output file not found.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail: { type: string }
+
+  /api/v1/storage/cleanup:
+    post:
+      tags: [storage]
+      summary: Cleanup expired uploads.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: Cleanup results.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CleanupResult" }
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+
+  /api/v1/health:
+    get:
+      tags: [health]
+      summary: Readiness health check.
+      responses:
+        "200":
+          description: Ready.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthCheckResponse" }
+        "503":
+          description: Not ready.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthCheckResponse" }
+
+  /api/v1/health/live:
+    get:
+      tags: [health]
+      summary: Liveness health check.
+      responses:
+        "200":
+          description: Live.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthCheckResponse" }
+
+  /api/v1/monitoring/jobs:
+    get:
+      tags: [monitoring]
+      summary: List tracked jobs for dashboards.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 200, default: 20 }
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0, default: 0 }
+        - in: query
+          name: status
+          schema:
+            anyOf:
+              - $ref: "#/components/schemas/JobStatus"
+              - type: "null"
+      responses:
+        "200":
+          description: Job list.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobListResponse" }
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+
+  /api/v1/monitoring/queue:
+    get:
+      tags: [monitoring]
+      summary: Queue snapshot (same as generation queue monitor).
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: Queue snapshot.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QueueMonitoringResponse" }
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+
+  /api/v1/monitoring/jobs/counts:
+    get:
+      tags: [monitoring]
+      summary: Counts of jobs by status.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: Counts map.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobCountsResponse" }
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+
+  /api/v1/monitoring/logs/tail:
+    get:
+      tags: [monitoring]
+      summary: Tail application log (admin only).
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - in: query
+          name: lines
+          schema: { type: integer, minimum: 1, maximum: 2000, default: 200 }
+      responses:
+        "200":
+          description: Log tail lines.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LogTailResponse" }
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          description: Admin privileges required.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail: { type: string }
+

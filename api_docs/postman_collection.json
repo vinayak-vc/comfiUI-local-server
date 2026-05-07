@@ -1,0 +1,355 @@
+{
+  "info": {
+    "_postman_id": "31d24fb6-e1e7-4825-85e9-4dcdac4b9b8a",
+    "name": "ComfyUI Orchestration Platform API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "HTTP API collection for client development. Use the provided environment variables BASE_URL, JWT, API_KEY."
+  },
+  "variable": [
+    { "key": "BASE_URL", "value": "{{BASE_URL}}" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{BASE_URL}}/api/v1/auth/register", "host": ["{{BASE_URL}}"], "path": ["api", "v1", "auth", "register"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"a-very-strong-password\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Token (password grant)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/x-www-form-urlencoded" }],
+            "url": { "raw": "{{BASE_URL}}/api/v1/auth/token", "host": ["{{BASE_URL}}"], "path": ["api", "v1", "auth", "token"] },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "username", "value": "user@example.com", "type": "text" },
+                { "key": "password", "value": "a-very-strong-password", "type": "text" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "if (json && json.access_token) {",
+                  "  pm.environment.set('JWT', json.access_token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{JWT}}" },
+              { "key": "X-API-Key", "value": "{{API_KEY}}" }
+            ],
+            "url": { "raw": "{{BASE_URL}}/api/v1/auth/me", "host": ["{{BASE_URL}}"], "path": ["api", "v1", "auth", "me"] }
+          }
+        },
+        {
+          "name": "Create API Key (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{JWT}}" },
+              { "key": "X-API-Key", "value": "{{API_KEY}}" }
+            ],
+            "url": { "raw": "{{BASE_URL}}/api/v1/auth/api-keys", "host": ["{{BASE_URL}}"], "path": ["api", "v1", "auth", "api-keys"] },
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"client-dev\"\n}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Generation (auth required)",
+      "item": [
+        {
+          "name": "Execute Workflow",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{JWT}}" },
+              { "key": "X-API-Key", "value": "{{API_KEY}}" }
+            ],
+            "url": { "raw": "{{BASE_URL}}/api/v1/generation/execute", "host": ["{{BASE_URL}}"], "path": ["api", "v1", "generation", "execute"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"t2i\",\n  \"workflow_name\": null,\n  \"parameters\": {\n    \"prompt\": \"a cinematic portrait photo\",\n    \"negative_prompt\": \"blurry\",\n    \"steps\": 30,\n    \"cfg\": 6,\n    \"width\": 1024,\n    \"height\": 1024,\n    \"loras\": [],\n    \"extra_parameters\": {}\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "Queue Workflow (202)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{JWT}}" },
+              { "key": "X-API-Key", "value": "{{API_KEY}}" }
+            ],
+            "url": { "raw": "{{BASE_URL}}/api/v1/generation/queue", "host": ["{{BASE_URL}}"], "path": ["api", "v1", "generation", "queue"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"t2i\",\n  \"workflow_name\": null,\n  \"parameters\": {\n    \"prompt\": \"a cinematic portrait photo\",\n    \"steps\": 30,\n    \"cfg\": 6,\n    \"width\": 1024,\n    \"height\": 1024,\n    \"loras\": [],\n    \"extra_parameters\": {}\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Job",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{JWT}}" },
+              { "key": "X-API-Key", "value": "{{API_KEY}}" }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/v1/generation/jobs/{{job_id}}",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "v1", "generation", "jobs", "{{job_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Cancel Job",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{JWT}}" },
+              { "key": "X-API-Key", "value": "{{API_KEY}}" }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/v1/generation/jobs/{{job_id}}/cancel",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "v1", "generation", "jobs", "{{job_id}}", "cancel"]
+            }
+          }
+        },
+        {
+          "name": "Monitor Queue",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{JWT}}" },
+              { "key": "X-API-Key", "value": "{{API_KEY}}" }
+            ],
+            "url": { "raw": "{{BASE_URL}}/api/v1/generation/queue", "host": ["{{BASE_URL}}"], "path": ["api", "v1", "generation", "queue"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Storage (auth required)",
+      "item": [
+        {
+          "name": "Upload Asset (multipart)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{JWT}}" },
+              { "key": "X-API-Key", "value": "{{API_KEY}}" }
+            ],
+            "url": { "raw": "{{BASE_URL}}/api/v1/storage/assets", "host": ["{{BASE_URL}}"], "path": ["api", "v1", "storage", "assets"] },
+            "body": {
+              "mode": "formdata",
+              "formdata": [{ "key": "file", "type": "file", "src": "" }]
+            }
+          }
+        },
+        {
+          "name": "List Assets",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{JWT}}" },
+              { "key": "X-API-Key", "value": "{{API_KEY}}" }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/v1/storage/assets?limit=50&offset=0",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "v1", "storage", "assets"],
+              "query": [
+                { "key": "limit", "value": "50" },
+                { "key": "offset", "value": "0" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Asset",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{JWT}}" },
+              { "key": "X-API-Key", "value": "{{API_KEY}}" }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/v1/storage/assets/{{asset_id}}",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "v1", "storage", "assets", "{{asset_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Download Asset",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{JWT}}" },
+              { "key": "X-API-Key", "value": "{{API_KEY}}" }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/v1/storage/assets/{{asset_id}}/download",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "v1", "storage", "assets", "{{asset_id}}", "download"]
+            }
+          }
+        },
+        {
+          "name": "Delete Asset (204)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{JWT}}" },
+              { "key": "X-API-Key", "value": "{{API_KEY}}" }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/v1/storage/assets/{{asset_id}}",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "v1", "storage", "assets", "{{asset_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Register Output Asset",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{JWT}}" },
+              { "key": "X-API-Key", "value": "{{API_KEY}}" }
+            ],
+            "url": { "raw": "{{BASE_URL}}/api/v1/storage/outputs/register", "host": ["{{BASE_URL}}"], "path": ["api", "v1", "storage", "outputs", "register"] },
+            "body": { "mode": "raw", "raw": "{\n  \"relative_path\": \"some/output/file.png\",\n  \"content_type\": \"image/png\",\n  \"original_filename\": \"file.png\"\n}" }
+          }
+        },
+        {
+          "name": "Cleanup",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{JWT}}" },
+              { "key": "X-API-Key", "value": "{{API_KEY}}" }
+            ],
+            "url": { "raw": "{{BASE_URL}}/api/v1/storage/cleanup", "host": ["{{BASE_URL}}"], "path": ["api", "v1", "storage", "cleanup"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health (readiness)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{BASE_URL}}/api/v1/health", "host": ["{{BASE_URL}}"], "path": ["api", "v1", "health"] }
+          }
+        },
+        {
+          "name": "Live (liveness)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{BASE_URL}}/api/v1/health/live", "host": ["{{BASE_URL}}"], "path": ["api", "v1", "health", "live"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Monitoring (auth required)",
+      "item": [
+        {
+          "name": "List Jobs",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{JWT}}" },
+              { "key": "X-API-Key", "value": "{{API_KEY}}" }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/v1/monitoring/jobs?limit=20&offset=0",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "v1", "monitoring", "jobs"],
+              "query": [
+                { "key": "limit", "value": "20" },
+                { "key": "offset", "value": "0" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Queue Snapshot",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{JWT}}" },
+              { "key": "X-API-Key", "value": "{{API_KEY}}" }
+            ],
+            "url": { "raw": "{{BASE_URL}}/api/v1/monitoring/queue", "host": ["{{BASE_URL}}"], "path": ["api", "v1", "monitoring", "queue"] }
+          }
+        },
+        {
+          "name": "Job Counts",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{JWT}}" },
+              { "key": "X-API-Key", "value": "{{API_KEY}}" }
+            ],
+            "url": { "raw": "{{BASE_URL}}/api/v1/monitoring/jobs/counts", "host": ["{{BASE_URL}}"], "path": ["api", "v1", "monitoring", "jobs", "counts"] }
+          }
+        },
+        {
+          "name": "Logs Tail (admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{JWT}}" },
+              { "key": "X-API-Key", "value": "{{API_KEY}}" }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/v1/monitoring/logs/tail?lines=200",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "v1", "monitoring", "logs", "tail"],
+              "query": [{ "key": "lines", "value": "200" }]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
+
