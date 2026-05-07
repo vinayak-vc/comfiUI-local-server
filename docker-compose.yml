@@ -8,6 +8,7 @@ services:
         required: false
     environment:
       DATABASE_URL: ${DATABASE_URL:-sqlite+aiosqlite:///./data/app.db}
+      DATABASE_AUTO_CREATE_TABLES: ${DATABASE_AUTO_CREATE_TABLES:-false}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
       CELERY_RESULT_BACKEND_URL: ${CELERY_RESULT_BACKEND_URL:-redis://redis:6379/0}
@@ -26,9 +27,30 @@ services:
       - ./server/logs:/app/logs
       - backend_data:/app/data
     depends_on:
+      migrations:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     restart: unless-stopped
+
+  migrations:
+    build:
+      context: .
+      dockerfile: server/docker/Dockerfile
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-sqlite+aiosqlite:///./data/app.db}
+    volumes:
+      - backend_data:/app/data
+    command:
+      - "alembic"
+      - "-c"
+      - "/app/alembic.ini"
+      - "upgrade"
+      - "head"
+    restart: "no"
 
   worker:
     build:
@@ -49,6 +71,7 @@ services:
       - "--hostname=gpu-worker@%h"
     environment:
       DATABASE_URL: ${DATABASE_URL:-sqlite+aiosqlite:///./data/app.db}
+      DATABASE_AUTO_CREATE_TABLES: ${DATABASE_AUTO_CREATE_TABLES:-false}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
       CELERY_RESULT_BACKEND_URL: ${CELERY_RESULT_BACKEND_URL:-redis://redis:6379/0}
@@ -66,6 +89,8 @@ services:
       - ./server/logs:/app/logs
       - backend_data:/app/data
     depends_on:
+      migrations:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
       comfyui:

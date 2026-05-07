@@ -121,6 +121,44 @@ class ComfyUIJobTracker:
             counts[job.status] += 1
         return counts
 
+    async def list_jobs(
+        self,
+        limit: int,
+        offset: int = 0,
+        status: JobStatus | None = None,
+    ) -> tuple[list[TrackedJob], int]:
+        """
+        Lists jobs from Redis for dashboard display.
+
+        Note: Redis SCAN is used (not sorted server-side), so we sort by `updated_at` in memory.
+        """
+
+        if limit < 1:
+            return ([], 0)
+
+        jobs: list[TrackedJob] = []
+        async for key in self._redis_client.scan_iter(match=self._key("*")):
+            raw_value: str | None = await self._redis_client.get(key)
+            if raw_value is None:
+                continue
+
+            try:
+                job: TrackedJob = TrackedJob.model_validate_json(raw_value)
+            except ValueError:
+                continue
+
+            if status is not None and job.status != status:
+                continue
+
+            jobs.append(job)
+
+        jobs.sort(key=lambda j: j.updated_at, reverse=True)
+        total: int = len(jobs)
+
+        start: int = min(max(offset, 0), total)
+        end: int = min(start + limit, total)
+        return (jobs[start:end], total)
+
     async def _require_job(self, job_id: str) -> TrackedJob:
         job: TrackedJob | None = await self.get(job_id)
         if job is None:

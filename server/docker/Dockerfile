@@ -10,6 +10,8 @@ RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r /tmp/requirements.txt
 
 COPY server/app /app/app
+COPY server/alembic.ini /app/alembic.ini
+COPY server/migrations /app/migrations
 
 RUN mkdir -p /app/data /app/uploads /app/outputs /app/workflows /app/logs
 

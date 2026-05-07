@@ -290,6 +290,12 @@ Current verification coverage includes app import, auth security, health service
 * Use PostgreSQL and Alembic migrations for production database management.
 * Put nginx or another trusted proxy in front of the backend.
 * Store uploads and outputs on persistent local SSD or an S3-compatible backend in future iterations.
+* Alembic migrations are located in `server/migrations` and are intended to be the schema source of truth.
+* For production-like deployments, set `DATABASE_AUTO_CREATE_TABLES=false` and run migrations before starting `backend`/`worker` (the provided `docker-compose.yml` includes a one-shot `migrations` service).
+* Kubernetes scaling:
+  * Run `backend` as a Deployment (horizontal scaling is safe because job state lives in Redis and Socket.IO uses a Redis-backed manager).
+  * Keep `worker` replicas at `1` (or enforce strict single concurrency) to avoid overloading ComfyUI (`CELERY_WORKER_CONCURRENCY=1`).
+  * Run migrations as an initContainer or pre-deploy Job before rolling out backend/worker.
 
 ## Remaining Phases
 
