@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ComfyUI Dashboard</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 20px; }
+      input, select, button { font: inherit; padding: 8px; margin: 6px 0; }
+      button { cursor: pointer; }
+      .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+      .card { border: 1px solid #e5e5e5; border-radius: 10px; padding: 14px; margin-top: 12px; }
+      pre { background: #0b1020; color: #d7e0ff; padding: 12px; border-radius: 10px; overflow: auto; }
+      .muted { color: #667085; }
+      .error { color: #b42318; }
+    </style>
+  </head>
+  <body>
+    <h1>ComfyUI Dashboard</h1>
+    <p class="muted">Polls REST monitoring endpoints and job details.</p>
+
+    <div class="card">
+      <div class="row">
+        <div>
+          <label>Auth mode</label><br />
+          <select id="authMode">
+            <option value="jwt" selected>JWT Bearer</option>
+            <option value="apikey">API Key</option>
+          </select>
+        </div>
+        <div style="min-width: 420px">
+          <label>Token / Key</label><br />
+          <input id="authValue" type="text" placeholder="Paste JWT token or API key" style="width: 100%" />
+        </div>
+        <div>
+          <button id="saveAuth" type="button">Save</button>
+        </div>
+      </div>
+      <p id="authHint" class="muted"></p>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <div>
+          <label>Job ID</label><br />
+          <input id="jobId" type="text" placeholder="job-id" style="min-width: 280px" />
+        </div>
+        <div>
+          <button id="loadJob" type="button">Load job</button>
+        </div>
+        <div>
+          <button id="loadQueue" type="button">Queue snapshot</button>
+        </div>
+        <div>
+          <label>Recent status filter</label><br />
+          <select id="statusFilter" style="min-width: 170px">
+            <option value="all" selected>All</option>
+            <option value="queued">queued</option>
+            <option value="running">running</option>
+            <option value="retrying">retrying</option>
+            <option value="completed">completed</option>
+            <option value="failed">failed</option>
+            <option value="cancelled">cancelled</option>
+          </select>
+          <br />
+          <button id="loadRecent" type="button">Recent jobs</button>
+        </div>
+        <div>
+          <label>Auto refresh</label><br />
+          <label style="display:flex; gap:8px; align-items:center;">
+            <input id="autoRefreshEnabled" type="checkbox" checked />
+            <span>enabled</span>
+          </label>
+          <div>
+            <input id="autoRefreshSeconds" type="number" min="1" max="60" value="5" style="width: 90px" />
+            <span class="muted">seconds</span>
+          </div>
+        </div>
+        <div>
+          <label>Admin logs tail</label><br />
+          <button id="loadLogs" type="button">Load logs (admin)</button>
+          <div style="margin-top: 6px;">
+            <input id="logLines" type="number" min="50" max="2000" value="200" style="width: 90px" />
+            <span class="muted">lines</span>
+          </div>
+        </div>
+      </div>
+      <div class="error" id="errorBox" style="display:none; margin-top: 10px;"></div>
+    </div>
+
+    <div class="card">
+      <h2>Queue snapshot</h2>
+      <pre id="queuePre">{}</pre>
+    </div>
+
+    <div class="card">
+      <h2>Recent jobs</h2>
+      <pre id="recentPre">{}</pre>
+    </div>
+
+    <div class="card">
+      <h2>Job counts</h2>
+      <pre id="countsPre">{}</pre>
+    </div>
+
+    <div class="card">
+      <h2>Job detail</h2>
+      <pre id="jobPre">{}</pre>
+    </div>
+
+    <div class="card">
+      <h2>Log tail</h2>
+      <pre id="logPre">{}</pre>
+    </div>
+
+    <script>
+      const API_BASE = "/api/v1";
+
+      function getAuthHeaders() {
+        const mode = document.getElementById("authMode").value;
+        const value = document.getElementById("authValue").value.trim();
+        if (!value) return {};
+
+        if (mode === "jwt") {
+          return { "Authorization": `Bearer ${value}` };
+        }
+        return { "X-API-Key": value };
+      }
+
+      function setError(msg) {
+        const box = document.getElementById("errorBox");
+        box.style.display = msg ? "block" : "none";
+        box.textContent = msg || "";
+      }
+
+      async function fetchJson(url) {
+        setError("");
+        const headers = {
+          ...getAuthHeaders(),
+        };
+        const res = await fetch(url, { headers });
+        if (!res.ok) {
+          let detail = "";
+          try { detail = await res.text(); } catch (_) { detail = ""; }
+          throw new Error(`HTTP ${res.status}: ${detail || res.statusText}`);
+        }
+        return await res.json();
+      }
+
+      function saveAuth() {
+        const mode = document.getElementById("authMode").value;
+        const value = document.getElementById("authValue").value.trim();
+        localStorage.setItem("cui.dashboard.authMode", mode);
+        localStorage.setItem("cui.dashboard.authValue", value);
+        document.getElementById("authHint").textContent = "Saved locally in this browser.";
+      }
+
+      function loadAuth() {
+        const mode = localStorage.getItem("cui.dashboard.authMode");
+        const value = localStorage.getItem("cui.dashboard.authValue");
+        if (mode) document.getElementById("authMode").value = mode;
+        if (value) document.getElementById("authValue").value = value;
+        document.getElementById("authHint").textContent = value ? "Using saved credentials." : "";
+      }
+
+      function setPre(id, obj) {
+        document.getElementById(id).textContent = JSON.stringify(obj, null, 2);
+      }
+
+      document.getElementById("saveAuth").addEventListener("click", () => saveAuth());
+
+      function getStatusFilter() {
+        return document.getElementById("statusFilter").value;
+      }
+
+      function buildJobsUrl(limit, offset) {
+        const status = getStatusFilter();
+        const statusPart = (status && status !== "all") ? `&status=${encodeURIComponent(status)}` : "";
+        return `${API_BASE}/monitoring/jobs?limit=${encodeURIComponent(limit)}&offset=${encodeURIComponent(offset)}${statusPart}`;
+      }
+
+      async function loadQueue() {
+        const data = await fetchJson(`${API_BASE}/monitoring/queue`);
+        setPre("queuePre", data);
+      }
+
+      async function loadCounts() {
+        const data = await fetchJson(`${API_BASE}/monitoring/jobs/counts`);
+        setPre("countsPre", data);
+      }
+
+      async function loadRecent() {
+        const data = await fetchJson(buildJobsUrl(20, 0));
+        setPre("recentPre", data);
+      }
+
+      async function loadJob() {
+        const jobId = document.getElementById("jobId").value.trim();
+        if (!jobId) {
+          setError("Enter a job id.");
+          return;
+        }
+        const data = await fetchJson(`${API_BASE}/generation/jobs/${encodeURIComponent(jobId)}`);
+        setPre("jobPre", data);
+      }
+
+      async function loadLogsTail() {
+        const lines = document.getElementById("logLines").value;
+        const data = await fetchJson(`${API_BASE}/monitoring/logs/tail?lines=${encodeURIComponent(lines || 200)}`);
+        setPre("logPre", data);
+      }
+
+      document.getElementById("loadQueue").addEventListener("click", async () => loadQueue());
+      document.getElementById("loadRecent").addEventListener("click", async () => loadRecent());
+      document.getElementById("loadJob").addEventListener("click", async () => loadJob());
+      document.getElementById("loadLogs").addEventListener("click", async () => loadLogsTail());
+
+      let refreshTimer = null;
+
+      async function refreshAll() {
+        try {
+          await loadQueue();
+          await loadCounts();
+          await loadRecent();
+          const jobId = document.getElementById("jobId").value.trim();
+          if (jobId) {
+            await loadJob();
+          }
+        } catch (e) {
+          // fetchJson sets error; we keep quiet here.
+        }
+      }
+
+      function applyAutoRefresh() {
+        const enabled = document.getElementById("autoRefreshEnabled").checked;
+        const seconds = parseInt(document.getElementById("autoRefreshSeconds").value || "5", 10);
+        if (refreshTimer) {
+          clearInterval(refreshTimer);
+          refreshTimer = null;
+        }
+        if (!enabled) return;
+
+        refreshTimer = setInterval(() => {
+          refreshAll();
+        }, Math.max(1, seconds) * 1000);
+      }
+
+      document.getElementById("autoRefreshEnabled").addEventListener("change", () => applyAutoRefresh());
+      document.getElementById("autoRefreshSeconds").addEventListener("change", () => applyAutoRefresh());
+
+      loadAuth();
+      refreshAll();
+      applyAutoRefresh();
+    </script>
+  </body>
+</html>
+

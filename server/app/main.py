@@ -1,5 +1,7 @@
 """FastAPI application entrypoint."""
 
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -44,6 +46,14 @@ def create_app() -> FastAPI:
         StaticFiles(directory=settings.outputs_path),
         name="outputs",
     )
+
+    dashboard_dir: Path = Path(__file__).resolve().parent / "dashboard"
+    if dashboard_dir.exists():
+        app.mount(
+            "/dashboard",
+            StaticFiles(directory=str(dashboard_dir), html=True),
+            name="dashboard",
+        )
     return app
 
 
