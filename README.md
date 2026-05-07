@@ -172,6 +172,18 @@ Run a worker:
 celery -A app.queue.celery_app:celery_app worker --loglevel=INFO --concurrency=1 --queues=gpu_render_queue --prefetch-multiplier=1
 ```
 
+From repository root (Windows), you can also use:
+
+```bat
+start-worker.bat
+```
+
+To launch both backend and worker in separate windows:
+
+```bat
+start-local.bat
+```
+
 ## Docker Compose
 
 ```bash
