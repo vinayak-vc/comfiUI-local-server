@@ -43,4 +43,7 @@ class TokenService:
     def _get_secret(self) -> str:
         if self._settings.jwt_secret_key is None:
             raise RuntimeError("JWT_SECRET_KEY must be configured before issuing or validating tokens.")
-        return self._settings.jwt_secret_key.get_secret_value()
+        secret: str = self._settings.jwt_secret_key.get_secret_value()
+        if not secret.strip():
+            raise RuntimeError("JWT_SECRET_KEY must be configured before issuing or validating tokens.")
+        return secret

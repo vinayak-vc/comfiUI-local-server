@@ -87,7 +87,7 @@
       "name": "Generation (auth required)",
       "item": [
         {
-          "name": "Execute Workflow",
+          "name": "Execute Workflow (Flux Schnell defaults)",
           "request": {
             "method": "POST",
             "header": [
@@ -98,7 +98,23 @@
             "url": { "raw": "{{BASE_URL}}/api/v1/generation/execute", "host": ["{{BASE_URL}}"], "path": ["api", "v1", "generation", "execute"] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"mode\": \"t2i\",\n  \"workflow_name\": null,\n  \"parameters\": {\n    \"prompt\": \"a cinematic portrait photo\",\n    \"negative_prompt\": \"blurry\",\n    \"steps\": 30,\n    \"cfg\": 6,\n    \"width\": 1024,\n    \"height\": 1024,\n    \"loras\": [],\n    \"extra_parameters\": {}\n  }\n}"
+              "raw": "{\n  \"mode\": \"t2i\",\n  \"workflow_name\": \"flux_schnell\",\n  \"parameters\": {\n    \"prompt\": \"a cinematic robot chef in a neon kitchen, high detail, soft studio lighting\",\n    \"negative_prompt\": \"\",\n    \"seed\": 173805153958730,\n    \"model\": \"flux1-schnell-fp8.safetensors\",\n    \"sampler\": \"euler\",\n    \"scheduler\": \"simple\",\n    \"steps\": 4,\n    \"cfg\": 1,\n    \"denoise\": 1,\n    \"width\": 1024,\n    \"height\": 1024,\n    \"batch_size\": 1,\n    \"loras\": [],\n    \"extra_parameters\": {}\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "Execute Workflow (minimal defaults)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{JWT}}" },
+              { "key": "X-API-Key", "value": "{{API_KEY}}" }
+            ],
+            "url": { "raw": "{{BASE_URL}}/api/v1/generation/execute", "host": ["{{BASE_URL}}"], "path": ["api", "v1", "generation", "execute"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
             }
           }
         },
@@ -114,7 +130,7 @@
             "url": { "raw": "{{BASE_URL}}/api/v1/generation/queue", "host": ["{{BASE_URL}}"], "path": ["api", "v1", "generation", "queue"] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"mode\": \"t2i\",\n  \"workflow_name\": null,\n  \"parameters\": {\n    \"prompt\": \"a cinematic portrait photo\",\n    \"steps\": 30,\n    \"cfg\": 6,\n    \"width\": 1024,\n    \"height\": 1024,\n    \"loras\": [],\n    \"extra_parameters\": {}\n  }\n}"
+              "raw": "{\n  \"parameters\": {\n    \"prompt\": \"a cinematic robot chef in a neon kitchen, high detail, soft studio lighting\",\n    \"seed\": 12345\n  }\n}"
             }
           }
         },

@@ -2,8 +2,9 @@
 
 import aiofiles
 from pathlib import Path
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 
+from app.api.url_helpers import with_absolute_output_urls_for_jobs
 from app.comfy.tracking import ComfyUIJobTracker
 from app.core.config import Settings, get_settings
 from app.dependencies import get_comfy_job_tracker, get_queue_service, require_admin_principal, require_principal
@@ -16,13 +17,20 @@ router: APIRouter = APIRouter(dependencies=[Depends(require_principal)])
 
 @router.get("/jobs", response_model=JobListResponse)
 async def list_jobs(
+    request: Request,
     limit: int = Query(default=20, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     status: JobStatus | None = Query(default=None),
     job_tracker: ComfyUIJobTracker = Depends(get_comfy_job_tracker),
 ) -> JobListResponse:
     jobs, total = await job_tracker.list_jobs(limit=limit, offset=offset, status=status)
-    return JobListResponse(total=total, limit=limit, offset=offset, status=status, jobs=jobs)
+    return JobListResponse(
+        total=total,
+        limit=limit,
+        offset=offset,
+        status=status,
+        jobs=with_absolute_output_urls_for_jobs(jobs, request),
+    )
 
 
 @router.get("/queue", response_model=QueueMonitoringResponse)

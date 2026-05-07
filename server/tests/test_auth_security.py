@@ -23,6 +23,13 @@ def test_token_service_requires_secret() -> None:
         token_service.create_access_token("user-id")
 
 
+def test_token_service_rejects_empty_secret() -> None:
+    token_service: TokenService = TokenService(Settings(jwt_secret_key=""))
+
+    with pytest.raises(RuntimeError):
+        token_service.create_access_token("user-id")
+
+
 def test_token_service_round_trips_subject() -> None:
     token_service: TokenService = TokenService(Settings(jwt_secret_key="test-secret"))
 

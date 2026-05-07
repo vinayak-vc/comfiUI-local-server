@@ -54,6 +54,30 @@ class ComfyUIClient:
     async def interrupt(self) -> None:
         await self._post_json("/interrupt", {})
 
+    async def get_output_file(
+        self,
+        filename: str,
+        subfolder: str,
+        output_type: str,
+    ) -> tuple[bytes, str]:
+        try:
+            response: httpx.Response = await self._client.get(
+                "/view",
+                params={
+                    "filename": filename,
+                    "subfolder": subfolder,
+                    "type": output_type,
+                },
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise ComfyUIResponseError(exc.response.text) from exc
+        except httpx.HTTPError as exc:
+            raise ComfyUIConnectionError(str(exc)) from exc
+
+        content_type: str = response.headers.get("content-type", "application/octet-stream")
+        return response.content, content_type
+
     def build_output_url(self, filename: str, subfolder: str, output_type: str) -> str:
         path_parts: list[str] = [self._settings.output_url_prefix.strip("/")]
         if subfolder:

@@ -4,7 +4,11 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+
+DEFAULT_FLUX_SCHNELL_PROMPT: str = (
+    "a cinematic robot chef in a neon kitchen, high detail, soft studio lighting"
+)
 
 
 class GenerationMode(StrEnum):
@@ -30,28 +34,89 @@ class LoraInjection(BaseModel):
 
 
 class WorkflowRuntimeParameters(BaseModel):
-    prompt: str
-    negative_prompt: str | None = None
-    seed: int | None = None
-    model: str | None = None
-    sampler: str | None = None
-    scheduler: str | None = None
-    steps: int | None = Field(default=None, ge=1)
-    cfg: float | None = Field(default=None, ge=0)
-    denoise: float | None = Field(default=None, ge=0, le=1)
-    width: int | None = Field(default=None, ge=1)
-    height: int | None = Field(default=None, ge=1)
-    batch_size: int | None = Field(default=None, ge=1)
-    input_image: str | None = None
-    input_video: str | None = None
-    loras: list[LoraInjection] = Field(default_factory=list)
-    extra_parameters: dict[str, Any] = Field(default_factory=dict)
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "prompt": DEFAULT_FLUX_SCHNELL_PROMPT,
+                    "negative_prompt": "",
+                    "seed": 173805153958730,
+                    "model": "flux1-schnell-fp8.safetensors",
+                    "sampler": "euler",
+                    "scheduler": "simple",
+                    "steps": 4,
+                    "cfg": 1,
+                    "denoise": 1,
+                    "width": 1024,
+                    "height": 1024,
+                    "batch_size": 1,
+                    "loras": [],
+                    "extra_parameters": {},
+                }
+            ]
+        }
+    )
+
+    prompt: str = Field(
+        default=DEFAULT_FLUX_SCHNELL_PROMPT,
+        description="Positive text prompt injected into Flux Schnell node 6.",
+    )
+    negative_prompt: str | None = Field(
+        default="",
+        description="Negative prompt injected into node 33. Flux Schnell commonly uses an empty negative prompt.",
+    )
+    seed: int | None = Field(
+        default=173805153958730,
+        description="KSampler seed for reproducible output. Change it for a different image.",
+    )
+    model: str | None = Field(
+        default="flux1-schnell-fp8.safetensors",
+        description="Checkpoint name injected into CheckpointLoaderSimple node 30.",
+    )
+    sampler: str | None = Field(default="euler", description="KSampler sampler_name for node 31.")
+    scheduler: str | None = Field(default="simple", description="KSampler scheduler for node 31.")
+    steps: int | None = Field(default=4, ge=1, description="Flux Schnell is designed for low step counts; default is 4.")
+    cfg: float | None = Field(default=1, ge=0, description="Classifier-free guidance scale. Flux Schnell default is 1.")
+    denoise: float | None = Field(default=1, ge=0, le=1, description="Denoise strength for the KSampler.")
+    width: int | None = Field(default=1024, ge=1, description="Generated image width injected into EmptySD3LatentImage node 27.")
+    height: int | None = Field(default=1024, ge=1, description="Generated image height injected into EmptySD3LatentImage node 27.")
+    batch_size: int | None = Field(default=1, ge=1, description="Number of images generated in one workflow run.")
+    input_image: str | None = Field(default=None, description="Reserved for image-to-image workflows; unused by flux_schnell.")
+    input_video: str | None = Field(default=None, description="Reserved for video workflows; unused by flux_schnell.")
+    loras: list[LoraInjection] = Field(
+        default_factory=list,
+        description="LoRA injections. Leave empty for flux_schnell because the workflow has no LoraLoader nodes.",
+    )
+    extra_parameters: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Advanced node override map using node_id.input keys, for example {'31.steps': 6}.",
+    )
 
 
 class WorkflowExecutionRequest(BaseModel):
-    mode: GenerationMode
-    parameters: WorkflowRuntimeParameters
-    workflow_name: str | None = None
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {},
+                {
+                    "parameters": {
+                        "prompt": DEFAULT_FLUX_SCHNELL_PROMPT,
+                        "seed": 12345,
+                    }
+                },
+            ]
+        }
+    )
+
+    mode: GenerationMode = Field(default=GenerationMode.TEXT_TO_IMAGE, description="Generation mode. Defaults to text-to-image.")
+    parameters: WorkflowRuntimeParameters = Field(
+        default_factory=WorkflowRuntimeParameters,
+        description="Runtime parameters. Omit the object or individual fields to use Flux Schnell defaults.",
+    )
+    workflow_name: str | None = Field(
+        default="flux_schnell",
+        description="Workflow template filename without .json. Defaults to workflow/flux_schnell.json.",
+    )
 
 
 class OutputAsset(BaseModel):

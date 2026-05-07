@@ -9,7 +9,7 @@ from uuid import uuid4
 import structlog
 
 from app.comfy.client import ComfyUIClient
-from app.comfy.exceptions import ComfyUIError, WorkflowExecutionError
+from app.comfy.exceptions import ComfyUIError, WorkflowExecutionError, WorkflowTemplateError
 from app.comfy.outputs import ComfyUIOutputParser
 from app.comfy.tracking import ComfyUIJobTracker
 from app.comfy.websocket import ComfyUIWebSocketListener
@@ -117,6 +117,14 @@ class WorkflowExecutionService:
                 started_at=started_at,
                 completed_at=completed_at,
             )
+        except WorkflowTemplateError as exc:
+            error_message: str = str(exc)
+            if mark_failed_on_error:
+                await self._job_tracker.mark_failed(job_id, error_message)
+                if self._event_publisher is not None:
+                    await self._event_publisher.emit_job_failed(job_id, error_message)
+            self._logger.warning("workflow_template_invalid", job_id=job_id, error=error_message)
+            raise
         except Exception as exc:
             error_message: str = str(exc)
             if await self._job_tracker.is_cancelled(job_id):

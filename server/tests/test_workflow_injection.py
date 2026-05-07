@@ -6,7 +6,8 @@ import pytest
 
 from app.comfy.exceptions import WorkflowTemplateError
 from app.core.config import Settings
-from app.schemas.comfy import GenerationMode, WorkflowRuntimeParameters
+from app.schemas.comfy import GenerationMode, WorkflowExecutionRequest, WorkflowRuntimeParameters
+from app.workflows.builder import WorkflowBuilder
 from app.workflows.injection import WorkflowParameterInjector
 from app.workflows.template import WorkflowTemplateLoader
 
@@ -64,6 +65,30 @@ def test_injector_applies_standard_comfyui_node_conventions() -> None:
     assert injected_workflow["4"]["inputs"]["batch_size"] == 2
 
 
+def test_injector_applies_flux_sd3_latent_dimensions() -> None:
+    workflow: dict[str, Any] = {
+        "27": {
+            "class_type": "EmptySD3LatentImage",
+            "inputs": {
+                "width": 1024,
+                "height": 1024,
+                "batch_size": 1,
+            },
+        },
+    }
+    parameters: WorkflowRuntimeParameters = WorkflowRuntimeParameters(
+        width=768,
+        height=1344,
+        batch_size=2,
+    )
+
+    injected_workflow: dict[str, Any] = WorkflowParameterInjector().inject(workflow, parameters, {})
+
+    assert injected_workflow["27"]["inputs"]["width"] == 768
+    assert injected_workflow["27"]["inputs"]["height"] == 1344
+    assert injected_workflow["27"]["inputs"]["batch_size"] == 2
+
+
 def test_injector_applies_explicit_parameter_map() -> None:
     workflow: dict[str, Any] = {
         "10": {
@@ -85,8 +110,47 @@ def test_injector_applies_explicit_parameter_map() -> None:
     assert injected_workflow["10"]["inputs"]["value"] == "mapped prompt"
 
 
+def test_injector_rejects_loras_when_workflow_has_no_lora_nodes() -> None:
+    workflow: dict[str, Any] = {
+        "1": {
+            "class_type": "CLIPTextEncode",
+            "inputs": {"text": ""},
+        },
+    }
+    parameters: WorkflowRuntimeParameters = WorkflowRuntimeParameters(
+        loras=[
+            {
+                "name": "example.safetensors",
+                "strength_model": 1.0,
+                "strength_clip": 1.0,
+            }
+        ],
+    )
+
+    with pytest.raises(WorkflowTemplateError, match="Workflow does not contain enough LoraLoader nodes"):
+        WorkflowParameterInjector().inject(workflow, parameters, {})
+
+
 def test_template_loader_rejects_path_traversal() -> None:
     loader: WorkflowTemplateLoader = WorkflowTemplateLoader(Settings())
 
     with pytest.raises(WorkflowTemplateError):
         loader.load(mode=GenerationMode.TEXT_TO_IMAGE, workflow_name="../secret")
+
+
+def test_default_execution_request_builds_flux_schnell_workflow() -> None:
+    request: WorkflowExecutionRequest = WorkflowExecutionRequest()
+    workflow: dict[str, Any] = WorkflowBuilder(Settings()).build(
+        request.mode,
+        request.parameters,
+        request.workflow_name,
+    )
+
+    assert request.mode == GenerationMode.TEXT_TO_IMAGE
+    assert request.workflow_name == "flux_schnell"
+    assert workflow["6"]["inputs"]["text"] == request.parameters.prompt
+    assert workflow["30"]["inputs"]["ckpt_name"] == "flux1-schnell-fp8.safetensors"
+    assert workflow["31"]["inputs"]["steps"] == 4
+    assert workflow["31"]["inputs"]["sampler_name"] == "euler"
+    assert workflow["31"]["inputs"]["scheduler"] == "simple"
+    assert workflow["27"]["inputs"]["width"] == 1024

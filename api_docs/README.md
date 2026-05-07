@@ -39,6 +39,10 @@ Admin-only endpoints require `is_admin=true`.
 
 ## Notes for client dev
 
+- `POST /api/v1/generation/execute` and `POST /api/v1/generation/queue` default to the Flux Schnell workflow (`workflow/flux_schnell.json`). Send `{}` or omit individual fields to use defaults; provide only the parameters you want to override.
+- Flux Schnell defaults are `workflow_name=flux_schnell`, `mode=t2i`, `model=flux1-schnell-fp8.safetensors`, `sampler=euler`, `scheduler=simple`, `steps=4`, `cfg=1`, `denoise=1`, `width=1024`, `height=1024`, and `batch_size=1`.
+- Leave `loras` empty for `flux_schnell`; that workflow does not contain `LoraLoader` nodes.
+- Generation output `url` fields are returned as absolute downloadable URLs based on the API request host, for example `http://192.168.1.28:8000/outputs/ComfyUI_00007_.png`.
 - Uploads and outputs are also served as static files:
   - `GET /uploads/...`
   - `GET /outputs/...`

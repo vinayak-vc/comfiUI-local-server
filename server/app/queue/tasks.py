@@ -9,6 +9,7 @@ from celery.exceptions import MaxRetriesExceededError, Retry, SoftTimeLimitExcee
 from redis.asyncio import Redis
 
 from app.comfy.client import ComfyUIClient
+from app.comfy.exceptions import WorkflowTemplateError
 from app.comfy.tracking import ComfyUIJobTracker
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
@@ -35,6 +36,9 @@ def render_workflow_task(self: Task, job_id: str, request_payload: dict[str, Any
         return asyncio.run(_execute_workflow_task(self, job_id, request_payload))
     except Retry:
         raise
+    except WorkflowTemplateError as exc:
+        logger.warning("queued_workflow_template_invalid", job_id=job_id, error=str(exc))
+        return asyncio.run(_mark_task_failed(job_id, str(exc)))
     except SoftTimeLimitExceeded as exc:
         return asyncio.run(_handle_task_failure(self, job_id, "Workflow execution timed out.", exc))
     except Exception as exc:
@@ -124,6 +128,25 @@ async def _handle_task_failure(
         return failed_job.model_dump(mode="json")
     except MaxRetriesExceededError:
         failed_job = await tracker.mark_failed(job_id, error_message)
+        await publisher.emit_job_failed(job_id, error_message)
+        return failed_job.model_dump(mode="json")
+    finally:
+        await redis_client.aclose()
+
+
+async def _mark_task_failed(job_id: str, error_message: str) -> dict[str, Any]:
+    settings: Settings = get_settings()
+    redis_client: Redis = Redis.from_url(
+        settings.redis_url,
+        encoding="utf-8",
+        decode_responses=True,
+        socket_timeout=settings.redis_socket_timeout_seconds,
+    )
+    tracker: ComfyUIJobTracker = ComfyUIJobTracker(redis_client, settings)
+    publisher: SocketEventPublisher = SocketEventPublisher(settings)
+
+    try:
+        failed_job: TrackedJob = await tracker.mark_failed(job_id, error_message)
         await publisher.emit_job_failed(job_id, error_message)
         return failed_job.model_dump(mode="json")
     finally:

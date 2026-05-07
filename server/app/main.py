@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from socketio import ASGIApp
 
+from app.api.output_proxy import router as output_router
 from app.api.router import api_router
 from app.core.config import Settings, get_settings
 from app.core.lifecycle import lifespan
@@ -35,6 +36,7 @@ def create_app() -> FastAPI:
 
     app.middleware("http")(request_logging_middleware)
     app.middleware("http")(rate_limit_middleware)
+    app.include_router(output_router)
     app.include_router(api_router, prefix=settings.api_prefix)
     app.mount(
         settings.upload_url_prefix,

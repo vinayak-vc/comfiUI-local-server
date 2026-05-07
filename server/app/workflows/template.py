@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from app.comfy.exceptions import WorkflowTemplateError
-from app.core.config import Settings
+from app.core.config import PROJECT_ROOT, Settings
 from app.schemas.comfy import GenerationMode
 
 
@@ -37,6 +37,8 @@ class WorkflowTemplateLoader:
 
     def load(self, mode: GenerationMode, workflow_name: str | None) -> WorkflowTemplate:
         template_path: Path = self._resolve_template_path(mode, workflow_name)
+        if not template_path.exists():
+            template_path = self._resolve_legacy_template_path(template_path.name)
         if not template_path.exists():
             raise WorkflowTemplateError(f"Workflow template does not exist: {template_path}")
 
@@ -78,5 +80,12 @@ class WorkflowTemplateLoader:
         resolved_path: Path = (self._workflow_root / template_name).resolve()
         resolved_root: Path = self._workflow_root.resolve()
         if resolved_root not in resolved_path.parents and resolved_path != resolved_root:
+            raise WorkflowTemplateError("Workflow template path escapes configured root.")
+        return resolved_path
+
+    def _resolve_legacy_template_path(self, template_filename: str) -> Path:
+        legacy_root: Path = (PROJECT_ROOT / "workflow").resolve()
+        resolved_path: Path = (legacy_root / template_filename).resolve()
+        if legacy_root not in resolved_path.parents and resolved_path != legacy_root:
             raise WorkflowTemplateError("Workflow template path escapes configured root.")
         return resolved_path

@@ -78,7 +78,7 @@ class WorkflowParameterInjector:
                 self._set_if_present(inputs, "steps", parameters.steps)
                 self._set_if_present(inputs, "cfg", parameters.cfg)
                 self._set_if_present(inputs, "denoise", parameters.denoise)
-            elif class_type == "EmptyLatentImage":
+            elif class_type in {"EmptyLatentImage", "EmptySD3LatentImage"}:
                 self._set_if_present(inputs, "width", parameters.width)
                 self._set_if_present(inputs, "height", parameters.height)
                 self._set_if_present(inputs, "batch_size", parameters.batch_size)

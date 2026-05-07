@@ -102,44 +102,67 @@ components:
       type: object
       required: [name]
       properties:
-        name: { type: string }
-        strength_model: { type: number, default: 1.0 }
-        strength_clip: { type: number, default: 1.0 }
+        name: { type: string, description: "LoRA filename available to ComfyUI." }
+        strength_model: { type: number, default: 1.0, description: "Model strength for LoRA injection." }
+        strength_clip: { type: number, default: 1.0, description: "CLIP strength for LoRA injection." }
 
     WorkflowRuntimeParameters:
       type: object
-      required: [prompt]
       properties:
-        prompt: { type: string }
-        negative_prompt: { type: [string, "null"] }
-        seed: { type: [integer, "null"] }
-        model: { type: [string, "null"] }
-        sampler: { type: [string, "null"] }
-        scheduler: { type: [string, "null"] }
-        steps: { type: [integer, "null"], minimum: 1 }
-        cfg: { type: [number, "null"], minimum: 0 }
-        denoise: { type: [number, "null"], minimum: 0, maximum: 1 }
-        width: { type: [integer, "null"], minimum: 1 }
-        height: { type: [integer, "null"], minimum: 1 }
-        batch_size: { type: [integer, "null"], minimum: 1 }
-        input_image: { type: [string, "null"] }
-        input_video: { type: [string, "null"] }
+        prompt:
+          type: string
+          default: a cinematic robot chef in a neon kitchen, high detail, soft studio lighting
+          description: "Positive text prompt injected into Flux Schnell node 6."
+        negative_prompt:
+          type: [string, "null"]
+          default: ""
+          description: "Negative prompt injected into node 33. Flux Schnell commonly uses an empty negative prompt."
+        seed:
+          type: [integer, "null"]
+          default: 173805153958730
+          description: "KSampler seed for reproducible output. Change it for a different image."
+        model:
+          type: [string, "null"]
+          default: flux1-schnell-fp8.safetensors
+          description: "Checkpoint name injected into CheckpointLoaderSimple node 30."
+        sampler: { type: [string, "null"], default: euler, description: "KSampler sampler_name for node 31." }
+        scheduler: { type: [string, "null"], default: simple, description: "KSampler scheduler for node 31." }
+        steps: { type: [integer, "null"], minimum: 1, default: 4, description: "Flux Schnell is designed for low step counts; default is 4." }
+        cfg: { type: [number, "null"], minimum: 0, default: 1, description: "Classifier-free guidance scale. Flux Schnell default is 1." }
+        denoise: { type: [number, "null"], minimum: 0, maximum: 1, default: 1, description: "Denoise strength for the KSampler." }
+        width: { type: [integer, "null"], minimum: 1, default: 1024, description: "Generated image width injected into EmptySD3LatentImage node 27." }
+        height: { type: [integer, "null"], minimum: 1, default: 1024, description: "Generated image height injected into EmptySD3LatentImage node 27." }
+        batch_size: { type: [integer, "null"], minimum: 1, default: 1, description: "Number of images generated in one workflow run." }
+        input_image: { type: [string, "null"], description: "Reserved for image-to-image workflows; unused by flux_schnell." }
+        input_video: { type: [string, "null"], description: "Reserved for video workflows; unused by flux_schnell." }
         loras:
           type: array
           items: { $ref: "#/components/schemas/LoraInjection" }
           default: []
+          description: "LoRA injections. Leave empty for flux_schnell because the workflow has no LoraLoader nodes."
         extra_parameters:
           type: object
           additionalProperties: true
           default: {}
+          description: "Advanced node override map using node_id.input keys, for example {'31.steps': 6}."
 
     WorkflowExecutionRequest:
       type: object
-      required: [mode, parameters]
       properties:
-        mode: { $ref: "#/components/schemas/GenerationMode" }
-        parameters: { $ref: "#/components/schemas/WorkflowRuntimeParameters" }
-        workflow_name: { type: [string, "null"] }
+        mode:
+          allOf:
+            - $ref: "#/components/schemas/GenerationMode"
+          default: t2i
+          description: "Generation mode. Defaults to text-to-image."
+        parameters:
+          allOf:
+            - $ref: "#/components/schemas/WorkflowRuntimeParameters"
+          default: {}
+          description: "Runtime parameters. Omit the object or individual fields to use Flux Schnell defaults."
+        workflow_name:
+          type: [string, "null"]
+          default: flux_schnell
+          description: "Workflow template filename without .json. Defaults to workflow/flux_schnell.json."
 
     OutputAsset:
       type: object
@@ -148,7 +171,7 @@ components:
         filename: { type: string }
         subfolder: { type: string }
         type: { type: string }
-        url: { type: string, description: "URL string; server may return absolute URL." }
+        url: { type: string, description: "Absolute downloadable URL for HTTP API responses." }
         media_type: { type: string }
 
     ProgressEvent:
@@ -450,22 +473,38 @@ paths:
         - bearerAuth: []
         - apiKeyAuth: []
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema: { $ref: "#/components/schemas/WorkflowExecutionRequest" }
             examples:
-              t2i:
+              fluxDefaults:
+                summary: Use Flux Schnell defaults
+                value: {}
+              overridePrompt:
+                summary: Override only selected defaults
+                value:
+                  parameters:
+                    prompt: a cinematic robot chef in a neon kitchen, high detail, soft studio lighting
+                    seed: 12345
+              explicitDefaults:
+                summary: Full Flux Schnell default request
                 value:
                   mode: t2i
-                  workflow_name: null
+                  workflow_name: flux_schnell
                   parameters:
-                    prompt: a cinematic portrait photo
-                    negative_prompt: blurry
-                    steps: 30
-                    cfg: 6
+                    prompt: a cinematic robot chef in a neon kitchen, high detail, soft studio lighting
+                    negative_prompt: ""
+                    seed: 173805153958730
+                    model: flux1-schnell-fp8.safetensors
+                    sampler: euler
+                    scheduler: simple
+                    steps: 4
+                    cfg: 1
+                    denoise: 1
                     width: 1024
                     height: 1024
+                    batch_size: 1
                     loras: []
                     extra_parameters: {}
       responses:
@@ -493,10 +532,40 @@ paths:
         - bearerAuth: []
         - apiKeyAuth: []
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema: { $ref: "#/components/schemas/WorkflowExecutionRequest" }
+            examples:
+              fluxDefaults:
+                summary: Queue with Flux Schnell defaults
+                value: {}
+              overridePrompt:
+                summary: Queue and override selected defaults
+                value:
+                  parameters:
+                    prompt: a cinematic robot chef in a neon kitchen, high detail, soft studio lighting
+                    seed: 12345
+              explicitDefaults:
+                summary: Full Flux Schnell default request
+                value:
+                  mode: t2i
+                  workflow_name: flux_schnell
+                  parameters:
+                    prompt: a cinematic robot chef in a neon kitchen, high detail, soft studio lighting
+                    negative_prompt: ""
+                    seed: 173805153958730
+                    model: flux1-schnell-fp8.safetensors
+                    sampler: euler
+                    scheduler: simple
+                    steps: 4
+                    cfg: 1
+                    denoise: 1
+                    width: 1024
+                    height: 1024
+                    batch_size: 1
+                    loras: []
+                    extra_parameters: {}
       responses:
         "202":
           description: Job accepted.
