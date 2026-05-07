@@ -65,7 +65,7 @@ class ComfyUIJobTracker:
 
     async def mark_retrying(self, job_id: str, error: str, retry_count: int) -> TrackedJob:
         job: TrackedJob = await self._require_job(job_id)
-        if job.status == JobStatus.CANCELLED:
+        if job.status in {JobStatus.CANCELLED, JobStatus.COMPLETED}:
             return job
         job.status = JobStatus.RETRYING
         job.error = error
@@ -87,7 +87,7 @@ class ComfyUIJobTracker:
 
     async def mark_failed(self, job_id: str, error: str) -> TrackedJob:
         job: TrackedJob = await self._require_job(job_id)
-        if job.status == JobStatus.CANCELLED:
+        if job.status in {JobStatus.CANCELLED, JobStatus.COMPLETED}:
             return job
         job.status = JobStatus.FAILED
         job.error = error

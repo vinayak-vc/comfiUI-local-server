@@ -19,6 +19,7 @@ from app.queue.factory import WorkerServiceFactory
 from app.schemas.comfy import JobStatus, OutputAsset, TrackedJob, WorkflowExecutionRequest
 from app.services.workflow_execution import WorkflowExecutionService
 from app.socket.publisher import SocketEventPublisher
+from app.storage.exceptions import AssetNotFoundError
 from app.storage.service import StorageService
 
 
@@ -71,6 +72,7 @@ async def _register_output_assets(outputs: list[OutputAsset]) -> None:
         return
 
     settings: Settings = get_settings()
+    logger: structlog.stdlib.BoundLogger = structlog.get_logger("celery_task")
     database_manager: DatabaseSessionManager = DatabaseSessionManager(settings)
     await database_manager.connect()
     try:
@@ -78,11 +80,19 @@ async def _register_output_assets(outputs: list[OutputAsset]) -> None:
             storage_service: StorageService = StorageService(settings, session)
             for output in outputs:
                 relative_path: str = _output_relative_path(output)
-                await storage_service.register_output(
-                    relative_path=relative_path,
-                    content_type=None,
-                    original_filename=output.filename,
-                )
+                try:
+                    await storage_service.register_output(
+                        relative_path=relative_path,
+                        content_type=None,
+                        original_filename=output.filename,
+                    )
+                except AssetNotFoundError:
+                    logger.warning(
+                        "output_asset_registration_skipped",
+                        filename=output.filename,
+                        relative_path=relative_path,
+                        reason="file_not_found_in_backend_outputs_path",
+                    )
     finally:
         await database_manager.close()
 

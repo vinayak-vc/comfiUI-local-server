@@ -250,6 +250,15 @@ Authorization: Bearer <jwt-token>
 
 When the job finishes, `status` becomes `completed` and `outputs` contains downloadable URLs.
 
+Polling rules:
+
+- Continue polling only while `status` is `queued`, `running`, or `retrying`.
+- Stop polling when `status` is `completed`, `failed`, or `cancelled`.
+- HTTP `200` only means the polling request succeeded; always inspect the JSON `status`.
+- If `status` is `completed`, use `outputs[].url` and stop polling immediately.
+- If `status` is `failed` or `cancelled`, show `error` if present and stop polling.
+- Use a client-side timeout, for example 10 minutes, so polling cannot run forever.
+
 Example completed output:
 
 ```json
