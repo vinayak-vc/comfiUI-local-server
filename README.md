@@ -148,10 +148,22 @@ and use migrations instead of automatic table creation.
 
 ## Run Locally
 
+Start Redis first (required by app startup), for example:
+
+```bash
+docker run --name comfy-redis -p 6379:6379 -d redis:7.4-alpine
+```
+
 From `server`:
 
 ```bash
 uvicorn app.main:socket_app --host 0.0.0.0 --port 8000
+```
+
+From repository root (Windows), you can also use:
+
+```bat
+start-server.bat
 ```
 
 Run a worker:

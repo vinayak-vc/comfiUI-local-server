@@ -22,7 +22,13 @@ def add_log_level(
     return event_dict
 
 
+def _resolve_log_level(level_name: str) -> int:
+    normalized: str = level_name.upper()
+    return logging.getLevelNamesMapping().get(normalized, logging.INFO)
+
+
 def configure_logging(settings: Settings) -> None:
+    resolved_level: int = _resolve_log_level(settings.log_level)
     processors: list[Processor] = [
         structlog.contextvars.merge_contextvars,
         add_log_level,
@@ -37,7 +43,7 @@ def configure_logging(settings: Settings) -> None:
         processors.append(structlog.dev.ConsoleRenderer())
 
     logging.basicConfig(
-        level=settings.log_level,
+        level=resolved_level,
         format="%(message)s",
         stream=sys.stdout,
     )
@@ -54,13 +60,13 @@ def configure_logging(settings: Settings) -> None:
             encoding="utf-8",
         )
         file_handler.set_name(file_handler_name)
-        file_handler.setLevel(settings.log_level)
+        file_handler.setLevel(resolved_level)
         file_handler.setFormatter(logging.Formatter("%(message)s"))
         root_logger.addHandler(file_handler)
 
     structlog.configure(
         processors=processors,
-        wrapper_class=structlog.make_filtering_bound_logger(settings.log_level),
+        wrapper_class=structlog.make_filtering_bound_logger(resolved_level),
         logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
     )
