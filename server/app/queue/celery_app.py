@@ -15,6 +15,7 @@ def create_celery_app() -> Celery:
         include=["app.queue.tasks"],
     )
     celery_app.conf.update(
+        broker_connection_retry_on_startup=True,
         task_default_queue=settings.celery_queue_name,
         task_queues=[Queue(settings.celery_queue_name, routing_key=settings.celery_queue_name)],
         task_default_exchange=settings.celery_queue_name,

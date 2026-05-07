@@ -15,6 +15,6 @@ if not exist "%PYTHON_EXE%" (
 
 cd /d "%ROOT_DIR%server"
 echo Starting Celery worker on queue gpu_render_queue
-"%PYTHON_EXE%" -m celery -A app.queue.celery_app:celery_app worker --loglevel=INFO --concurrency=1 --queues=gpu_render_queue --prefetch-multiplier=1
+"%PYTHON_EXE%" -m celery -A app.queue.celery_app:celery_app worker --pool=solo --loglevel=INFO --concurrency=1 --queues=gpu_render_queue --prefetch-multiplier=1
 
 endlocal
