@@ -1,0 +1,123 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: server/docker/Dockerfile
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-sqlite+aiosqlite:///./data/app.db}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND_URL: ${CELERY_RESULT_BACKEND_URL:-redis://redis:6379/0}
+      CELERY_QUEUE_NAME: ${CELERY_QUEUE_NAME:-gpu_render_queue}
+      SOCKETIO_CHANNEL: ${SOCKETIO_CHANNEL:-socketio}
+      ALLOW_USER_REGISTRATION: ${ALLOW_USER_REGISTRATION:-false}
+      COMFYUI_BASE_URL: ${COMFYUI_BASE_URL:-http://comfyui:8188}
+      COMFYUI_WS_URL: ${COMFYUI_WS_URL:-ws://comfyui:8188/ws}
+      OUTPUT_URL_PREFIX: ${OUTPUT_URL_PREFIX:-/outputs}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ./server/uploads:/app/uploads
+      - ./server/outputs:/app/outputs
+      - ./server/workflows:/app/workflows
+      - ./server/logs:/app/logs
+      - backend_data:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: server/docker/Dockerfile
+    env_file:
+      - path: .env
+        required: false
+    command:
+      - celery
+      - "-A"
+      - app.queue.celery_app:celery_app
+      - worker
+      - "--loglevel=INFO"
+      - "--concurrency=${CELERY_WORKER_CONCURRENCY:-1}"
+      - "--queues=${CELERY_QUEUE_NAME:-gpu_render_queue}"
+      - "--prefetch-multiplier=1"
+      - "--hostname=gpu-worker@%h"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-sqlite+aiosqlite:///./data/app.db}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND_URL: ${CELERY_RESULT_BACKEND_URL:-redis://redis:6379/0}
+      CELERY_QUEUE_NAME: ${CELERY_QUEUE_NAME:-gpu_render_queue}
+      CELERY_WORKER_CONCURRENCY: ${CELERY_WORKER_CONCURRENCY:-1}
+      SOCKETIO_CHANNEL: ${SOCKETIO_CHANNEL:-socketio}
+      ALLOW_USER_REGISTRATION: ${ALLOW_USER_REGISTRATION:-false}
+      COMFYUI_BASE_URL: ${COMFYUI_BASE_URL:-http://comfyui:8188}
+      COMFYUI_WS_URL: ${COMFYUI_WS_URL:-ws://comfyui:8188/ws}
+      OUTPUT_URL_PREFIX: ${OUTPUT_URL_PREFIX:-/outputs}
+    volumes:
+      - ./server/uploads:/app/uploads
+      - ./server/outputs:/app/outputs
+      - ./server/workflows:/app/workflows
+      - ./server/logs:/app/logs
+      - backend_data:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
+      comfyui:
+        condition: service_started
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  comfyui:
+    image: yanwk/comfyui-boot:cu124
+    environment:
+      CLI_ARGS: "--listen 0.0.0.0 --port 8188"
+    ports:
+      - "${COMFYUI_PORT:-8188}:8188"
+    volumes:
+      - comfyui_data:/root
+      - ./server/outputs:/root/ComfyUI/output
+      - ./server/uploads:/root/ComfyUI/input
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "${NGINX_PORT:-8080}:80"
+    volumes:
+      - ./server/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./server/outputs:/srv/outputs:ro
+      - ./server/uploads:/srv/uploads:ro
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  backend_data:
+  redis_data:
+  comfyui_data:
